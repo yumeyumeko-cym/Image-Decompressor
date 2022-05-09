@@ -1,0 +1,1937 @@
+//MILESTONE1 UNIT
+
+`timescale 1ns/100ps
+
+`ifndef DISABLE_DEFAULT_NET
+`default_nettype none
+`endif
+
+`include "define_state.h"
+module milestone1(
+	 input logic Clock,
+	 input logic Resetn,
+	 input logic start,
+	 input logic  [15:0] SRAM_read_data,
+	 output logic [15:0] SRAM_write_data,
+	 output logic done,
+	 output logic SRAM_we_n,
+	 output logic [17:0] SRAM_address 
+);
+
+M1_state_type M1_state;
+
+parameter U_OFFSET   = 18'd38400,
+          V_OFFSET   = 18'd57600,
+			 RGB_OFFSET = 18'd146944;
+
+logic [7:0] u_5[1:0] ; //U[(J-5)/2]+U[(J+5)/2]
+logic [7:0] u_3[1:0] ; //U[(J-3)/2]+U[(J+3)/2]
+logic [7:0] u_1[1:0] ;
+logic [15:0] u_buf; // buffer for u
+logic [31:0] u_prime_odd; // accumulator 
+
+
+
+logic [7:0] v_5[1:0] ;
+logic [7:0] v_3[1:0] ;
+logic [7:0] v_1[1:0] ;
+
+logic [15:0] v_buf; // buffer for v
+logic [31:0] v_prime_odd; // buffer for v' for even values
+
+logic [15:0] y_reg[2:0];
+
+
+logic [7:0] r_out[1:0]; // for clipping
+logic [7:0] g_out[1:0];
+logic [7:0] b_out[1:0];
+
+logic [7:0] r_reg[1:0]; //Store RGB result
+logic [7:0] g_reg[1:0];
+logic [7:0] b_reg[1:0];
+
+logic signed[31:0] coeff; //76284,104595,-25624,-53281,132251: sign-extension needed
+logic signed[31:0] coeff2;
+logic [8:0]  op1;  		//SRAM read memory, zero-extension needed
+logic signed[8:0] op2;  //21, -52, 159: sign-extension needed
+logic [31:0] op1_extended, op2_extended;
+logic [31:0] op3;  		//Even RGB output, 32 bits
+logic [31:0] op4; 	 	//Odd RGB output, 32 signed already
+logic [31:0] op3_math, op4_math;
+
+
+logic [31:0] multi,multi_rgb1,multi_rgb2;// uv MULTIPLICATION
+logic [31:0] red[1:0];  // accumulator
+logic [31:0] green[1:0];
+logic [31:0] blue[1:0];
+
+
+
+logic [17:0] data_counter, y_counter, y_counter_loop;
+logic [17:0] RGB_address;
+
+
+always @(posedge Clock or negedge resetn) begin
+	if (~resetn) begin
+		op1 <= 8'd0;
+		op2 <= 8'sd0;
+		op3 <= 32'd0;
+		op4 <= 32'd0;
+		coeff <= 32'sd0;
+		coeff2 <= 32'sd0;
+		SRAM_we_n <= 1'b1;
+		red[1]   <= 32'd0;
+		red[0]   <= 32'd0;
+		blue[1]  <= 32'd0;
+		blue[0]  <= 32'd0;
+		green[1] <= 32'd0;
+		green[0] <= 32'd0;
+		r_reg[1] <= 8'd0;
+		r_reg[0] <= 8'd0;
+		g_reg[1] <= 8'd0;
+		g_reg[0] <= 8'd0;
+		b_reg[1] <= 8'd0;
+		b_reg[0] <= 8'd0;
+		u_5[1] <= 8'd0;
+		u_5[0] <= 8'd0;
+		u_3[1] <= 8'd0;
+		u_3[0] <= 8'd0;
+		u_1[1] <= 8'd0;
+		u_1[0] <= 8'd0;
+		v_5[1] <= 8'd0;
+		v_5[0] <= 8'd0;
+		v_3[1] <= 8'd0;
+		v_3[0] <= 8'd0;
+		v_1[1] <= 8'd0;
+		v_1[0] <= 8'd0;
+		y_reg[2] <= 16'd0;
+		y_reg[1] <= 16'd0;
+		y_reg[0] <= 16'd0;
+		
+		u_buf <= 15'd0;
+		v_buf <= 15'd0;
+		u_prime_odd <= 32'd0;
+		v_prime_odd <= 32'd0;
+		data_counter <= 18'd0;
+		y_counter <= 18'd0;
+		y_counter_loop <= 18'd0;
+		RGB_address <= RGB_OFFSET;
+		M1_state <= M1_IDLE;	
+	end else begin
+		case (M1_state)
+			M1_IDLE: begin
+				done <= 1'b0;
+				if (start) begin
+					M1_state <= LI_0;
+					SRAM_we_n <= 1'b1;
+					SRAM_address <= data_counter + U_OFFSET;
+					
+				
+					op1 <= 8'd0;
+					op2 <= 8'd0;
+					op3 <= 32'd0;
+					op4 <= 32'd0;
+					coeff <= 32'sd0;
+					coeff2 <= 32'sd0;
+					SRAM_we_n <= 1'b1;
+					red[1]   <= 32'd0;
+					red[0]   <= 32'd0;
+					blue[1]  <= 32'd0;
+					blue[0]  <= 32'd0;
+					green[1] <= 32'd0;
+					green[0] <= 32'd0;
+					r_reg[1] <= 8'd0;
+					r_reg[0] <= 8'd0;
+					g_reg[1] <= 8'd0;
+					g_reg[0] <= 8'd0;
+					b_reg[1] <= 8'd0;
+					b_reg[0] <= 8'd0;
+					u_5[1] <= 8'd0;
+					u_5[0] <= 8'd0;
+					u_3[1] <= 8'd0;
+					u_3[0] <= 8'd0;
+					u_1[1] <= 8'd0;
+					u_1[0] <= 8'd0;
+					v_5[1] <= 8'd0;
+					v_5[0] <= 8'd0;
+					v_3[1] <= 8'd0;
+					v_3[0] <= 8'd0;
+					v_1[1] <= 8'd0;
+					v_1[0] <= 8'd0;
+					y_reg[2] <= 16'd0;
+					y_reg[1] <= 16'd0;
+					y_reg[0] <= 16'd0;
+					u_buf <= 15'd0;
+					v_buf <= 15'd0;
+					u_prime_odd <= 32'd0;
+					v_prime_odd <= 32'd0;
+					data_counter <= 18'd0;
+					y_counter <= 18'd0;
+					y_counter_loop <= 18'd0;
+					RGB_address <= RGB_OFFSET;	
+				end
+			end
+			
+			LI_0: begin
+				SRAM_address <= data_counter + U_OFFSET + 1'd1;
+				
+				M1_state <= LI_1;
+			end
+			
+			LI_1: begin
+				SRAM_address <= data_counter + V_OFFSET;
+				
+				M1_state <= LI_2;
+			end
+			
+			LI_2: begin
+				// read u0u1
+				SRAM_address <= data_counter + V_OFFSET + 1'd1;
+				data_counter <= data_counter + 2'd2;
+				
+				u_5[1] <= SRAM_read_data[15:8]; //u0
+				u_3[1] <= SRAM_read_data[15:8];
+				u_1[1] <= SRAM_read_data[15:8];
+				u_1[0] <= SRAM_read_data[7:0];  //u1
+				 
+				M1_state <= LI_3;
+			end
+			
+			LI_3: begin
+				// read u2u3
+				SRAM_address <= y_counter;
+				y_counter <= y_counter + 1'd1;
+				
+				u_3[0] <= SRAM_read_data[15:8]; //u2
+				u_5[0] <= SRAM_read_data[7:0];  //u3
+				
+				M1_state <= LI_4;
+			end
+			
+			LI_4: begin
+				SRAM_address <= data_counter + U_OFFSET;
+				
+				v_5[1] <= SRAM_read_data[15:8]; //v0
+				v_3[1] <= SRAM_read_data[15:8];
+				v_1[1] <= SRAM_read_data[15:8];
+				v_1[0] <= SRAM_read_data[7:0];  //v1
+				
+				op1 <= u_5[1] + u_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= {24'd0,u_1[1]}; // u'0 = u0
+				coeff <= 32'sd132251;
+				
+				M1_state <= LI_5;
+			end
+			
+			LI_5: begin
+				SRAM_address <= data_counter + V_OFFSET;
+				data_counter <= data_counter + 1'd1;
+				
+				
+				v_3[0] <= SRAM_read_data[15:8]; //u2
+				v_5[0] <= SRAM_read_data[7:0];  //u3
+				
+				op1 <= u_1[1] + u_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= u_1[1]; 
+				coeff <= -32'sd25624;
+				
+				
+				u_prime_odd <= multi;
+				blue[0] <= multi_rgb1;
+				
+				
+				M1_state <= LI_6;
+			end
+			
+			LI_6: begin
+				SRAM_address <= y_counter;
+				y_counter <= y_counter +1'd1;
+				y_reg[0] <= SRAM_read_data; //y0y1
+				
+				op1 <= u_3[1] + u_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= v_5[1]; 
+				coeff <= 32'sd104595;
+				
+				u_prime_odd <= u_prime_odd + multi;
+				green[0] <= multi_rgb1;
+				
+				
+				M1_state <= LI_7;
+			end
+			
+			LI_7: begin
+				SRAM_address <= y_counter;
+				y_counter <= y_counter +1'd1;
+				u_buf <= SRAM_read_data; // u4u5
+				u_prime_odd <= (u_prime_odd + multi + 32'd128) >>> 8; //u'1 calculated
+				
+				
+				op1 <= v_5[1] + v_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= v_5[1];
+				coeff <= -32'sd53281;
+				
+				red[0] <= multi_rgb1;
+				
+				M1_state <= LI_8;
+			end
+			
+			LI_8: begin
+				v_buf <= SRAM_read_data; // v4v5
+				v_prime_odd <= multi;
+				
+				op1 <= v_1[1] + v_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= y_reg[0][15:8];
+				coeff <= 32'sd76204;
+				
+				green[0] <= green[0] + multi_rgb1;
+				
+				M1_state <= LI_9;
+			end
+			
+			LI_9: begin
+				y_reg[1] <= SRAM_read_data; // y2y3
+				v_prime_odd <= v_prime_odd+multi;
+				
+				op1 <= v_3[1] + v_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= y_reg[0][7:0];
+				coeff <= 32'sd76204;
+				
+				
+				red[0] <= red[0] + multi_rgb1;
+				green[0] <= green[0] + multi_rgb1;
+				blue[0] <= blue[0] + multi_rgb1;
+				
+				
+
+				M1_state <= LI_10;
+			end
+			
+			LI_10: begin
+				y_reg[2] <= SRAM_read_data; //y4y5
+				v_prime_odd <= (v_prime_odd + multi + 32'd128) >>> 8; //v'1 calculated
+				
+				op3 <= u_prime_odd; // u'1
+				op4 <= u_prime_odd; // u'1
+				
+				coeff <= 32'sd132251; // b
+				coeff2 <= -32'sd25624; // g
+				
+				red[1] <= multi_rgb1;
+				green[1] <= multi_rgb1;
+				blue[1] <= multi_rgb1;
+				
+				// shift reg
+				u_5[1] <= u_3[1];
+				u_3[1] <= u_1[1];
+				u_1[1] <= u_1[0];
+				u_1[0] <= u_3[0];
+				u_3[0] <= u_5[0];
+				u_5[0] <= u_buf[15:8];
+				
+				
+				r_reg[0] <= r_out[0];
+				b_reg[0] <= b_out[0];
+				g_reg[0] <= g_out[0];
+				
+				
+				M1_state <= LI_11;
+			end
+			
+			LI_11: begin
+				op3 <= v_prime_odd;
+				op4 <= v_prime_odd;
+				
+				coeff <= 32'sd104595; // r
+				coeff2 <= -32'sd53281; // g
+				
+				//shift reg
+				v_5[1] <= v_3[1];
+				v_3[1] <= v_1[1];
+				v_1[1] <= v_1[0];
+				v_1[0] <= v_3[0];
+				v_3[0] <= v_5[0];
+				v_5[0] <= v_buf[15:8];
+				
+				blue[1] <= blue[1] + multi_rgb1;
+				green[1] <= green[1] + multi+rgb2;
+				
+				
+				M1_state <= LI_12;
+			end
+			
+			LI_12: begin
+				op1 <= u_5[1] + u_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= u_1[1]; // u'2 = u1
+				coeff <= 32'sd132251;
+				
+				red[1] <= red[1] + multi_rgb1;
+				green[1] <= green[1] + multi_rgb2; // RGB1 calculated
+				
+				M1_state <= LI_13;
+			end
+			
+			LI_13: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				//Write R0G0 to SRAM
+				SRAM_write_data <= {r_reg[0],g_reg[0]};
+				
+				u_prime_odd <= multi;
+				blue[0] <= multi_rgb1;
+				
+				op1 <= u_1[1] + u_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= u_1[1]; // u'2 = u1
+				coeff <= -32'sd25624;				
+				r_reg[1] <= r_out[1];
+				b_reg[1] <= b_out[1];
+				g_reg[1] <= g_out[1];
+				
+				
+				
+			   SRAM_we_n <= 1'b0;
+				M1_state <= LI_14;
+			end
+			
+			LI_14: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				//Write B0R1 to SRAM
+				SRAM_write_data <= {b_reg[0],r_reg[1]};
+				
+				op1 <= u_3[1] + u_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= v_1[1];  // v'2 = v1
+				coeff <= 32'sd104595;
+				
+				u_prime_odd <= u_prime_odd + multi;
+				green[0] <= multi_rgb1;
+				
+				
+				
+				M1_state <= LI_15;
+			end
+			
+			LI_15: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				//Write G1B1 to SRAM
+				SRAM_write_data <= {g_reg[1],b_reg[1]};
+				
+				op1 <= v_5[1] + v_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= v_1[1];// v'2 = v1
+				coeff <= -32'sd53281;
+				
+				u_prime_odd <= (u_prime_odd + multi + 32'd128) >>> 8; //u'3 calculated
+				red[0] <= multi_rgb1;
+				
+				u_5[1] <= u_3[1];
+				u_3[1] <= u_1[1];
+				u_1[1] <= u_1[0];
+				u_1[0] <= u_3[0];
+				u_3[0] <= u_5[0];
+				u_5[0] <= u_buf[7:0]; // u5
+				
+				SRAM_we_n <= 1'b1;
+				M1_state <= LI_16;
+			end
+			
+			LI_16: begin
+				SRAM_address <= data_counter + U_OFFSET; 
+				
+				
+				op1 <= v_1[1] + v_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= y_reg[1][15:8]; //y2
+				coeff <= 32'sd76204;
+				
+				v_prime_odd <= multi;
+				green[0] <= green[0] + multi_rgb1;
+				
+				
+				
+				
+				M1_state <= LI_17;
+			end
+			
+			LI_17: begin
+				SRAM_address <= data_counter + v_OFFSET;
+				data_counter <= data_counter + 1'd1;
+				
+				v_prime_odd <= v_prime_odd+multi;
+				
+				op1 <= v_3[1] + v_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= y_reg[1][7:0]; //y3
+				coeff <= 32'sd76204;
+				
+				
+				red[0] <= red[0] + multi_rgb1;
+				green[0] <= green[0] + multi_rgb1;
+				blue[0] <= blue[0] + multi_rgb1; // RGB2 calculated
+				
+				
+				
+				
+				M1_state <= LI_18;
+			end
+			
+			LI_18: begin
+				v_prime_odd <= (v_prime_odd + multi + 32'd128) >>> 8; //v'3 calculated
+				op3 <= u_prime_odd; // u'3
+				op4 <= u_prime_odd; // u'3
+				
+				coeff <= 32'sd132251; // b
+				coeff2 <= -32'sd25624; // g
+				
+				red[1] <= multi_rgb1;
+				green[1] <= multi_rgb1;
+				blue[1] <= multi_rgb1;
+				
+				
+				r_reg[0] <= r_out[0];
+				b_reg[0] <= b_out[0];
+				g_reg[0] <= g_out[0]; // RGB2 stored
+				
+				
+				M1_state <= LI_19;
+			end
+			
+			LI_19: begin
+				u_buf <= SRAM_read_data; // u6u7
+				op3 <= v_prime_odd;
+				op4 <= v_prime_odd;
+				
+				coeff <= 32'sd104595; // r
+				coeff2 <= -32'sd53281; // g
+				
+				//shift reg
+				v_5[1] <= v_3[1];
+				v_3[1] <= v_1[1];
+				v_1[1] <= v_1[0];
+				v_1[0] <= v_3[0];
+				v_3[0] <= v_5[0];
+				v_5[0] <= v_buf[7:0]; //v5
+				
+				blue[1] <= blue[1] + multi_rgb1;
+				green[1] <= green[1] + multi+rgb2;
+
+				M1_state <= LI_20;
+			end
+			
+			LI_20: begin
+				u_buf <= SRAM_read_data; // u6u7
+				op1 <= u_5[1] + u_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= u_1[1]; // u'4 = u2
+				coeff <= 32'sd132251;
+				
+				red[1] <= red[1] + multi_rgb1;
+				green[1] <= green[1] + multi_rgb2; // RGB3 calculated
+				M1_state <= LI_21;
+			end
+			
+			LI_21: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				//Write R2G2 to SRAM
+				SRAM_write_data <= {r_reg[0],g_reg[0]};
+				
+				u_prime_odd <= multi;
+				blue[0] <= multi_rgb1;
+				
+				op1 <= u_1[1] + u_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= u_1[1]; // u'4 = u2
+				coeff <= -32'sd25624;				
+				r_reg[1] <= r_out[1];
+				b_reg[1] <= b_out[1];
+				g_reg[1] <= g_out[1]; // RGB3 stored
+				
+				
+				
+			   SRAM_we_n <= 1'b0;
+				
+				M1_state <= LI_22;
+			end
+			
+			LI_22: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				//Write B2R3 to SRAM
+				SRAM_write_data <= {b_reg[0],r_reg[1]};
+				
+				op1 <= u_3[1] + u_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= v_1[1];  // v'4 = v2
+				coeff <= 32'sd104595;
+				
+				u_prime_odd <= u_prime_odd + multi;
+				green[0] <= multi_rgb1;
+				
+				
+				
+				M1_state <= LI_23;
+			end
+			
+			LI_23: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				//Write G1B1 to SRAM
+				SRAM_write_data <= {g_reg[1],b_reg[1]};
+				
+				op1 <= v_5[1] + v_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= v_1[1];// v'4 = v2
+				coeff <= -32'sd53281;
+				
+				u_prime_odd <= (u_prime_odd + multi + 32'd128) >>> 8; //u'5 calculated
+				red[0] <= multi_rgb1;
+				
+				u_5[1] <= u_3[1];
+				u_3[1] <= u_1[1];
+				u_1[1] <= u_1[0];
+				u_1[0] <= u_3[0];
+				u_3[0] <= u_5[0];
+				u_5[0] <= u_buf[15:8]; // u6
+				
+				SRAM_we_n <= 1'b1;
+				
+				M1_state <= LI_24;
+			end
+			
+			LI_24: begin
+				SRAM_address <= y_counter;
+				y_counter <= y_counter +1'd1;
+				op1 <= v_1[1] + v_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= y_reg[2][15:8]; //y4
+				coeff <= 32'sd76204;
+				
+				v_prime_odd <= multi;
+				green[0] <= green[0] + multi_rgb1;
+				
+				M1_state <= LI_25;
+			end
+			
+			LI_25: begin
+				SRAM_address <= y_counter;
+				y_counter <= y_counter +1'd1;
+				
+				v_prime_odd <= v_prime_odd+multi;
+				
+				op1 <= v_3[1] + v_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= y_reg[2][7:0]; //y5
+				coeff <= 32'sd76204;
+				
+				
+				red[0] <= red[0] + multi_rgb1;
+				green[0] <= green[0] + multi_rgb1;
+				blue[0] <= blue[0] + multi_rgb1; // RGB4 calculated
+				
+				M1_state <= LI_26;
+			end
+			
+			LI_26: begin
+				v_prime_odd <= (v_prime_odd + multi + 32'd128) >>> 8; //v'5 calculated
+				op3 <= u_prime_odd; // u'5
+				op4 <= u_prime_odd; // u'5
+				
+				coeff <= 32'sd132251; // b
+				coeff2 <= -32'sd25624; // g
+				
+				red[1] <= multi_rgb1;
+				green[1] <= multi_rgb1;
+				blue[1] <= multi_rgb1;
+				
+				
+				r_reg[0] <= r_out[0];
+				b_reg[0] <= b_out[0];
+				g_reg[0] <= g_out[0]; // RGB4 stored
+				
+				//shift reg
+				v_5[1] <= v_3[1];
+				v_3[1] <= v_1[1];
+				v_1[1] <= v_1[0];
+				v_1[0] <= v_3[0];
+				v_3[0] <= v_5[0];
+				v_5[0] <= v_buf[15:8]; //v6
+
+				M1_state <= LI_27;
+			end
+			
+			LI_27: begin
+				y_reg[0] <= SRAM_read_data;
+				op3 <= v_prime_odd;
+				op4 <= v_prime_odd;
+				
+				coeff <= 32'sd104595; // r
+				coeff2 <= -32'sd53281; // g
+				
+				
+				blue[1] <= blue[1] + multi_rgb1;
+				green[1] <= green[1] + multi+rgb2;
+				
+				
+				M1_state <= CC_0;
+			end
+			
+			CC_0: begin
+				y_reg[1] <= SRAM_read_data; //y8 y9
+				op1 <= u_5[1] + u_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= u_1[1]; // u'6 = u3
+				coeff <= 32'sd132251;
+				
+				red[1] <= red[1] + multi_rgb1;
+				green[1] <= green[1] + multi_rgb2; // RGB5 calculated
+			
+				
+			
+				M1_state <= CC_1;
+			end
+			
+			CC_1: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				//Write R4G4 to SRAM
+				SRAM_write_data <= {r_reg[0],g_reg[0]};
+				
+				u_prime_odd <= multi;
+				blue[0] <= multi_rgb1;
+				
+				op1 <= u_1[1] + u_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= u_1[1]; // u'6 = u3
+				coeff <= -32'sd25624;				
+				r_reg[1] <= r_out[1];
+				b_reg[1] <= b_out[1];
+				g_reg[1] <= g_out[1]; // RGB5 stored
+				
+				
+				
+			   SRAM_we_n <= 1'b0;		
+				M1_state <= CC_2;
+			end
+			
+			CC_2: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				//Write B4R5 to SRAM
+				SRAM_write_data <= {b_reg[0],r_reg[1]};
+				
+				op1 <= u_3[1] + u_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= v_1[1];  // v'6 = v3
+				coeff <= 32'sd104595;
+				
+				u_prime_odd <= u_prime_odd + multi;
+				green[0] <= multi_rgb1;
+			
+					
+			
+				M1_state <= CC_3;
+			end
+			
+			CC_3: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				//Write G5B5 to SRAM
+				SRAM_write_data <= {g_reg[1],b_reg[1]};
+				
+				op1 <= v_5[1] + v_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= v_1[1];// v'6 = v3
+				coeff <= -32'sd53281;
+				
+				u_prime_odd <= (u_prime_odd + multi + 32'd128) >>> 8; //u'7 calculated
+				red[0] <= multi_rgb1;
+				
+				u_5[1] <= u_3[1];
+				u_3[1] <= u_1[1];
+				u_1[1] <= u_1[0];
+				u_1[0] <= u_3[0];
+				u_3[0] <= u_5[0];
+				u_5[0] <= u_buf[7:0]; // u7
+				
+				SRAM_we_n <= 1'b1;
+	
+			
+				M1_state <= CC_4;
+			end
+			
+			CC_4: begin
+				SRAM_address <= data_counter + U_OFFSET;
+
+				op1 <= v_1[1] + v_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= y_reg[0][15:8];//y6
+				coeff <= 32'sd76204;
+				
+				v_prime_odd <= multi;
+				green[0] <= green[0] + multi_rgb1;
+			
+			
+				M1_state <= CC_5;
+			end
+			
+			CC_5: begin
+				SRAM_address <= data_counter + v_OFFSET;
+				data_counter <= data_counter + 1'd1;
+			
+				v_prime_odd <= v_prime_odd+multi;
+				
+				op1 <= v_3[1] + v_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= y_reg[0][7:0]; //y7
+				coeff <= 32'sd76204;
+				
+				
+				red[0] <= red[0] + multi_rgb1;
+				green[0] <= green[0] + multi_rgb1;
+				blue[0] <= blue[0] + multi_rgb1; // RGB6 calculated
+			
+			
+			
+			
+				M1_state <= CC_6;
+			end
+			
+			CC_6: begin
+				v_prime_odd <= (v_prime_odd + multi + 32'd128) >>> 8; //v'7 calculated
+				op3 <= u_prime_odd; // u'7
+				op4 <= u_prime_odd; // u'7
+				
+				coeff <= 32'sd132251; // b
+				coeff2 <= -32'sd25624; // g
+				
+				red[1] <= multi_rgb1;
+				green[1] <= multi_rgb1;
+				blue[1] <= multi_rgb1;
+				
+				
+				r_reg[0] <= r_out[0];
+				b_reg[0] <= b_out[0];
+				g_reg[0] <= g_out[0]; // RGB6 stored
+				
+				//shift reg
+				v_5[1] <= v_3[1];
+				v_3[1] <= v_1[1];
+				v_1[1] <= v_1[0];
+				v_1[0] <= v_3[0];
+				v_3[0] <= v_5[0];
+				v_5[0] <= v_buf[7:0]; //v7
+						
+			
+				M1_state <= CC_7;
+			end
+			
+			CC_7: begin
+				u_buf <= SRAM_read_data; //u8u9
+				op3 <= v_prime_odd;
+				op4 <= v_prime_odd;
+				
+				coeff <= 32'sd104595; // r
+				coeff2 <= -32'sd53281; // g
+				
+				
+				blue[1] <= blue[1] + multi_rgb1;
+				green[1] <= green[1] + multi+rgb2;
+		
+				M1_state <= CC_8;
+			end
+			
+			CC_8: begin
+				v_buf <= SRAM_read_data; //v8v9
+				
+				op1 <= u_5[1] + u_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= u_1[1]; // u'8 = u4
+				coeff <= 32'sd132251;
+				
+				red[1] <= red[1] + multi_rgb1;
+				green[1] <= green[1] + multi_rgb2; // RGB7 calculated
+		
+			
+				M1_state <= CC_9;
+			end
+			
+			CC_9: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				//Write R6G6 to SRAM
+				SRAM_write_data <= {r_reg[0],g_reg[0]};
+				
+				u_prime_odd <= multi;
+				blue[0] <= multi_rgb1;
+				
+				op1 <= u_1[1] + u_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= u_1[1]; // u'8 = u4
+				coeff <= -32'sd25624;				
+				r_reg[1] <= r_out[1];
+				b_reg[1] <= b_out[1];
+				g_reg[1] <= g_out[1]; // RGB7 stored
+				
+				
+				
+			   SRAM_we_n <= 1'b0;
+				M1_state <= CC_10;
+			end
+			
+			CC_10: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				//Write B6R7 to SRAM
+				SRAM_write_data <= {b_reg[0],r_reg[1]};
+				
+				op1 <= u_3[1] + u_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= v_1[1];  // v'8 = v4
+				coeff <= 32'sd104595;
+				
+				u_prime_odd <= u_prime_odd + multi;
+				green[0] <= multi_rgb1;
+						
+			
+				M1_state <= CC_11;
+			end
+			
+			CC_11: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				//Write G5B5 to SRAM
+				SRAM_write_data <= {g_reg[1],b_reg[1]};
+				
+				op1 <= v_5[1] + v_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= v_1[1];// v'8 = v4
+				coeff <= -32'sd53281;
+				
+				u_prime_odd <= (u_prime_odd + multi + 32'd128) >>> 8; //u'9 calculated
+				red[0] <= multi_rgb1;
+				
+				u_5[1] <= u_3[1];
+				u_3[1] <= u_1[1];
+				u_1[1] <= u_1[0];
+				u_1[0] <= u_3[0];
+				u_3[0] <= u_5[0];
+				u_5[0] <= u_buf[15:8]; // u8
+				
+				SRAM_we_n <= 1'b1;	
+				M1_state <= CC_12;
+			end
+			
+			CC_12: begin
+				SRAM_address <= y_counter;
+				y_counter <= y_counter + 1'd1;
+				op1 <= v_1[1] + v_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= y_reg[1][15:8];//y8
+				coeff <= 32'sd76204;
+				
+				v_prime_odd <= multi;
+				green[0] <= green[0] + multi_rgb1;
+		
+			
+				M1_state <= CC_13;
+			end
+			
+			CC_13: begin
+				SRAM_address <= y_counter;
+				y_counter <= y_counter + 1'd1;
+			
+				v_prime_odd <= v_prime_odd+multi;
+				
+				op1 <= v_3[1] + v_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= y_reg[1][7:0]; //y9
+				coeff <= 32'sd76204;
+				
+				
+				red[0] <= red[0] + multi_rgb1;
+				green[0] <= green[0] + multi_rgb1;
+				blue[0] <= blue[0] + multi_rgb1; // RGB8 calculated
+		
+			
+				M1_state <= CC_14;
+			end
+			
+			CC_14: begin
+				v_prime_odd <= (v_prime_odd + multi + 32'd128) >>> 8; //v'7 calculated
+				op3 <= u_prime_odd; // u'7
+				op4 <= u_prime_odd; // u'7
+				
+				coeff <= 32'sd132251; // b
+				coeff2 <= -32'sd25624; // g
+				
+				red[1] <= multi_rgb1;
+				green[1] <= multi_rgb1;
+				blue[1] <= multi_rgb1;
+				
+				
+				r_reg[0] <= r_out[0];
+				b_reg[0] <= b_out[0];
+				g_reg[0] <= g_out[0]; // RGB8 stored
+				
+				//shift reg
+				v_5[1] <= v_3[1];
+				v_3[1] <= v_1[1];
+				v_1[1] <= v_1[0];
+				v_1[0] <= v_3[0];
+				v_3[0] <= v_5[0];
+				v_5[0] <= v_buf[15:8]; //v8
+		
+			
+				M1_state <= CC_15;
+			end
+			
+			CC_15: begin
+				y_reg[0] <= SRAM_read_data;
+
+				op3 <= v_prime_odd;
+				op4 <= v_prime_odd;
+				
+				coeff <= 32'sd104595; // r
+				coeff2 <= -32'sd53281; // g
+				
+				
+				blue[1] <= blue[1] + multi_rgb1;
+				green[1] <= green[1] + multi+rgb2;
+				if (y_counter - y_counter_loop == 8'd157) begin
+					M1_state <= LO_0;
+				end else begin 
+					M1_state <= CC_0;
+				end
+				
+			end
+			
+			LO_0: begin
+				y_reg[1] <= SRAM_read_data; //y312y313
+				y_counter <= y_counter + 18'd151;
+				
+				op1 <= u_5[1] + u_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= u_1[1];
+				coeff <= 32'sd132251;
+				
+				red[1] <= red[1] + multi_rgb1;
+				green[1] <= green[1] + multi_rgb2; // RGB309 calculated
+		
+			
+				M1_state <= LO_1;
+			end
+			
+			LO_1: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				
+				u_prime_odd <= multi;
+				blue[0] <= multi_rgb1;
+				
+				op1 <= u_1[1] + u_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= u_1[1];
+				coeff <= -32'sd25624;				
+				r_reg[1] <= r_out[1];
+				b_reg[1] <= b_out[1];
+				g_reg[1] <= g_out[1]; // RGB309 stored
+				
+				
+				M1_state <= LO_2;
+			end
+			
+			LO_2: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				
+				op1 <= u_3[1] + u_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= v_1[1];
+				coeff <= 32'sd104595;
+				
+				u_prime_odd <= u_prime_odd + multi;
+				green[0] <= multi_rgb1;
+						
+			
+				M1_state <= LO_3;
+			end
+			
+			LO_3: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				
+				op1 <= v_5[1] + v_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= v_1[1];// v'8 = v4
+				coeff <= -32'sd53281;
+				
+				u_prime_odd <= (u_prime_odd + multi + 32'd128) >>> 8; //u'311 calculated
+				red[0] <= multi_rgb1;
+				
+				u_5[1] <= u_3[1];
+				u_3[1] <= u_1[1];
+				u_1[1] <= u_1[0];
+				u_1[0] <= u_3[0];
+				u_3[0] <= u_5[0];
+				u_5[0] <= u_buf[15:8]; // u159
+				
+				SRAM_we_n <= 1'b1;	
+				M1_state <= LO_4;
+			end
+			
+			LO_4: begin
+				op1 <= v_1[1] + v_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= y_reg[1][15:8];//y312
+				coeff <= 32'sd76204;
+				
+				v_prime_odd <= multi;
+				green[0] <= green[0] + multi_rgb1;
+		
+			
+				M1_state <= LO_5;
+			end
+			
+			LO_5: begin
+				v_prime_odd <= v_prime_odd+multi;
+				
+				op1 <= v_3[1] + v_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= y_reg[1][7:0]; //y313
+				coeff <= 32'sd76204;
+				
+				
+				red[0] <= red[0] + multi_rgb1;
+				green[0] <= green[0] + multi_rgb1;
+				blue[0] <= blue[0] + multi_rgb1; // RGB310 calculated
+		
+			
+				M1_state <= LO_6;
+			end
+			
+			LO_6: begin
+				v_prime_odd <= (v_prime_odd + multi + 32'd128) >>> 8; //v'311 calculated
+				op3 <= u_prime_odd; // u'311
+				op4 <= u_prime_odd; // u'311
+				
+				coeff <= 32'sd132251; // b
+				coeff2 <= -32'sd25624; // g
+				
+				red[1] <= multi_rgb1;
+				green[1] <= multi_rgb1;
+				blue[1] <= multi_rgb1;
+				
+				
+				r_reg[0] <= r_out[0];
+				b_reg[0] <= b_out[0];
+				g_reg[0] <= g_out[0]; // RGB310 stored
+				
+				//shift reg
+				v_5[1] <= v_3[1];
+				v_3[1] <= v_1[1];
+				v_1[1] <= v_1[0];
+				v_1[0] <= v_3[0];
+				v_3[0] <= v_5[0];
+				v_5[0] <= v_buf[15:8]; //v159
+				
+				
+				M1_state <= LO_7;
+			end
+			
+			LO_7: begin
+
+				op3 <= v_prime_odd;
+				op4 <= v_prime_odd;
+				
+				coeff <= 32'sd104595; // r
+				coeff2 <= -32'sd53281; // g
+				
+				
+				blue[1] <= blue[1] + multi_rgb1;
+				green[1] <= green[1] + multi+rgb2;
+			
+				M1_state <= LO_8;
+			end
+			
+			LO_8: begin
+				
+				op1 <= u_5[1] + u_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= u_1[1];
+				coeff <= 32'sd132251;
+				
+				red[1] <= red[1] + multi_rgb1;
+				green[1] <= green[1] + multi_rgb2; // RGB311 calculated
+		
+			
+				M1_state <= LO_9;
+			end
+			
+			LO_9: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				
+				u_prime_odd <= multi;
+				blue[0] <= multi_rgb1;
+				
+				op1 <= u_1[1] + u_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= u_1[1];
+				coeff <= -32'sd25624;				
+				r_reg[1] <= r_out[1];
+				b_reg[1] <= b_out[1];
+				g_reg[1] <= g_out[1]; // RGB309 stored
+				
+				
+				
+			   SRAM_we_n <= 1'b1;
+				M1_state <= LO_10;
+			end
+			
+			LO_10: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				
+				op1 <= u_3[1] + u_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= v_1[1];
+				coeff <= 32'sd104595;
+				
+				u_prime_odd <= u_prime_odd + multi;
+				green[0] <= multi_rgb1;
+						
+			
+				M1_state <= LO_11;
+			end
+			
+			LO_11: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				
+				op1 <= v_5[1] + v_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= v_1[1];
+				coeff <= -32'sd53281;
+				
+				u_prime_odd <= (u_prime_odd + multi + 32'd128) >>> 8; //u'311 calculated
+				red[0] <= multi_rgb1;
+				
+				u_5[1] <= u_3[1];
+				u_3[1] <= u_1[1];
+				u_1[1] <= u_1[0];
+				u_1[0] <= u_3[0];
+				u_3[0] <= u_5[0];
+				u_5[0] <= u_3[0]; // u159
+				
+				SRAM_we_n <= 1'b0;	
+				M1_state <= LO_12;
+			end
+			
+			LO_12: begin
+				op1 <= v_1[1] + v_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= y_reg[1][15:8];//y312
+				coeff <= 32'sd76204;
+				
+				v_prime_odd <= multi;
+				green[0] <= green[0] + multi_rgb1;
+		
+			
+				M1_state <= LO_13;
+			end
+			
+			LO_13: begin
+				v_prime_odd <= v_prime_odd+multi;
+				
+				op1 <= v_3[1] + v_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= y_reg[1][7:0]; //y313
+				coeff <= 32'sd76204;
+				
+				
+				red[0] <= red[0] + multi_rgb1;
+				green[0] <= green[0] + multi_rgb1;
+				blue[0] <= blue[0] + multi_rgb1; // RGB312 calculated
+		
+			
+				M1_state <= LO_14;
+			end
+			
+			LO_14: begin
+				v_prime_odd <= (v_prime_odd + multi + 32'd128) >>> 8; //v'313 calculated
+				op3 <= u_prime_odd; // u'313
+				op4 <= u_prime_odd; // u'313
+				
+				coeff <= 32'sd132251; // b
+				coeff2 <= -32'sd25624; // g
+				
+				red[1] <= multi_rgb1;
+				green[1] <= multi_rgb1;
+				blue[1] <= multi_rgb1;
+				
+				
+				r_reg[0] <= r_out[0];
+				b_reg[0] <= b_out[0];
+				g_reg[0] <= g_out[0]; // RGB312 stored
+				
+				//shift reg
+				v_5[1] <= v_3[1];
+				v_3[1] <= v_1[1];
+				v_1[1] <= v_1[0];
+				v_1[0] <= v_3[0];
+				v_3[0] <= v_5[0];
+				v_5[0] <= v_3[0]; //v159
+				
+				
+				M1_state <= LO_15;
+			end
+			
+			LO_15: begin
+				y_reg[0] <= SRAM_read_data;
+				y_counter <= y_counter + 18'd1;
+				
+				op3 <= v_prime_odd;
+				op4 <= v_prime_odd;
+				
+				coeff <= 32'sd104595; // r
+				coeff2 <= -32'sd53281; // g
+				
+				
+				blue[1] <= blue[1] + multi_rgb1;
+				green[1] <= green[1] + multi+rgb2;
+			
+				M1_state <= LO_16;
+			end
+			
+			LO_16: begin
+				y_reg[1] <= SRAM_read_data;
+				y_counter <= y_counter + 18'd1;
+				
+				op1 <= u_5[1] + u_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= u_1[1];
+				coeff <= 32'sd132251;
+				
+				red[1] <= red[1] + multi_rgb1;
+				green[1] <= green[1] + multi_rgb2; // RGB313 calculated
+		
+			
+				M1_state <= LO_17;
+			end
+			
+			LO_17: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				
+				u_prime_odd <= multi;
+				blue[0] <= multi_rgb1;
+				
+				op1 <= u_1[1] + u_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= u_1[1];
+				coeff <= -32'sd25624;				
+				r_reg[1] <= r_out[1];
+				b_reg[1] <= b_out[1];
+				g_reg[1] <= g_out[1]; // RGB313 stored
+				
+				
+				M1_state <= LO_18;
+			end
+			
+			LO_18: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				
+				op1 <= u_3[1] + u_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= v_1[1];
+				coeff <= 32'sd104595;
+				
+				u_prime_odd <= u_prime_odd + multi;
+				green[0] <= multi_rgb1;
+						
+			
+				M1_state <= LO_19;
+			end
+			
+			LO_19: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				
+				op1 <= v_5[1] + v_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= v_1[1];
+				coeff <= -32'sd53281;
+				
+				u_prime_odd <= (u_prime_odd + multi + 32'd128) >>> 8; //u'315 calculated
+				red[0] <= multi_rgb1;
+				
+				u_5[1] <= u_3[1];
+				u_3[1] <= u_1[1];
+				u_1[1] <= u_1[0];
+				u_1[0] <= u_3[0];
+				u_3[0] <= u_5[0];
+				u_5[0] <= u_3[0]; // u159
+				
+				M1_state <= LO_20;
+			end
+			
+			LO_20: begin
+				op1 <= v_1[1] + v_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= y_reg[1][15:8];//y316
+				coeff <= 32'sd76204;
+				
+				v_prime_odd <= multi;
+				green[0] <= green[0] + multi_rgb1;
+		
+			
+				M1_state <= LO_21;
+			end
+			
+			LO_21: begin
+				v_prime_odd <= v_prime_odd+multi;
+				
+				op1 <= v_3[1] + v_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= y_reg[1][7:0]; //y317
+				coeff <= 32'sd76204;
+				
+				
+				red[0] <= red[0] + multi_rgb1;
+				green[0] <= green[0] + multi_rgb1;
+				blue[0] <= blue[0] + multi_rgb1; // RGB314 calculated
+		
+			
+				M1_state <= LO_22;
+			end
+			
+			LO_22: begin
+				v_prime_odd <= (v_prime_odd + multi + 32'd128) >>> 8; //v'315 calculated
+				op3 <= u_prime_odd; // u'315
+				op4 <= u_prime_odd; // u'315
+				
+				coeff <= 32'sd132251; // b
+				coeff2 <= -32'sd25624; // g
+				
+				red[1] <= multi_rgb1;
+				green[1] <= multi_rgb1;
+				blue[1] <= multi_rgb1;
+				
+				
+				r_reg[0] <= r_out[0];
+				b_reg[0] <= b_out[0];
+				g_reg[0] <= g_out[0]; // RGB314 stored
+				
+				//shift reg
+				v_5[1] <= v_3[1];
+				v_3[1] <= v_1[1];
+				v_1[1] <= v_1[0];
+				v_1[0] <= v_3[0];
+				v_3[0] <= v_5[0];
+				v_5[0] <= v_3[0]; //v159
+				
+				
+				M1_state <= LO_23;
+			end
+			
+			LO_23: begin
+				y_reg[2] <= SRAM_read_data;
+
+				op3 <= v_prime_odd;
+				op4 <= v_prime_odd;
+				
+				coeff <= 32'sd104595; // r
+				coeff2 <= -32'sd53281; // g
+				
+				
+				blue[1] <= blue[1] + multi_rgb1;
+				green[1] <= green[1] + multi+rgb2;
+			
+				M1_state <= LO_24;
+			end
+			
+			LO_24: begin
+				
+				op1 <= u_5[1] + u_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= u_1[1];
+				coeff <= 32'sd132251;
+				
+				red[1] <= red[1] + multi_rgb1;
+				green[1] <= green[1] + multi_rgb2; // RGB315 calculated
+		
+			
+				M1_state <= LO_25;
+			end
+			
+			LO_25: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				
+				u_prime_odd <= multi;
+				blue[0] <= multi_rgb1;
+				
+				op1 <= u_1[1] + u_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= u_1[1];
+				coeff <= -32'sd25624;				
+				r_reg[1] <= r_out[1];
+				b_reg[1] <= b_out[1];
+				g_reg[1] <= g_out[1]; // RGB315 stored
+				
+				
+				M1_state <= LO_26;
+			end
+			
+			LO_26: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				
+				op1 <= u_3[1] + u_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= v_1[1];
+				coeff <= 32'sd104595;
+				
+				u_prime_odd <= u_prime_odd + multi;
+				green[0] <= multi_rgb1;
+						
+			
+				M1_state <= LO_27;
+			end
+			
+			LO_27: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				
+				op1 <= v_5[1] + v_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= v_1[1];
+				coeff <= -32'sd53281;
+				
+				u_prime_odd <= (u_prime_odd + multi + 32'd128) >>> 8; //u'317 calculated
+				red[0] <= multi_rgb1;
+				
+				u_5[1] <= u_3[1];
+				u_3[1] <= u_1[1];
+				u_1[1] <= u_1[0];
+				u_1[0] <= u_3[0];
+				u_3[0] <= u_5[0];
+				u_5[0] <= u_3[0]; // u159
+				
+				M1_state <= LO_28;
+			end
+			
+			LO_28: begin
+				op1 <= v_1[1] + v_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= y_reg[1][15:8];//y316
+				coeff <= 32'sd76204;
+				
+				v_prime_odd <= multi;
+				green[0] <= green[0] + multi_rgb1;
+		
+			
+				M1_state <= LO_29;
+			end
+			
+			LO_29: begin
+				v_prime_odd <= v_prime_odd+multi;
+				
+				op1 <= v_3[1] + v_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= y_reg[1][7:0]; //y317
+				coeff <= 32'sd76204;
+				
+				
+				red[0] <= red[0] + multi_rgb1;
+				green[0] <= green[0] + multi_rgb1;
+				blue[0] <= blue[0] + multi_rgb1; // RGB316 calculated
+		
+			
+				M1_state <= LO_30;
+			end
+			
+			LO_30: begin
+				v_prime_odd <= (v_prime_odd + multi + 32'd128) >>> 8; //v'317 calculated
+				op3 <= u_prime_odd; // u'317
+				op4 <= u_prime_odd; // u'317
+				
+				coeff <= 32'sd132251; // b
+				coeff2 <= -32'sd25624; // g
+				
+				red[1] <= multi_rgb1;
+				green[1] <= multi_rgb1;
+				blue[1] <= multi_rgb1;
+				
+				
+				r_reg[0] <= r_out[0];
+				b_reg[0] <= b_out[0];
+				g_reg[0] <= g_out[0]; // RGB316 stored
+				
+				//shift reg
+				v_5[1] <= v_3[1];
+				v_3[1] <= v_1[1];
+				v_1[1] <= v_1[0];
+				v_1[0] <= v_3[0];
+				v_3[0] <= v_5[0];
+				v_5[0] <= v_3[0]; //v159
+				
+				
+				M1_state <= LO_31;
+			end
+			
+			LO_31: begin
+				op3 <= v_prime_odd;
+				op4 <= v_prime_odd;
+				
+				coeff <= 32'sd104595; // r
+				coeff2 <= -32'sd53281; // g
+				
+				
+				blue[1] <= blue[1] + multi_rgb1;
+				green[1] <= green[1] + multi+rgb2;
+			
+				M1_state <= LO_32;
+			end
+			
+			LO_32: begin
+				op1 <= u_5[1] + u_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= u_1[1];
+				coeff <= 32'sd132251;
+				
+				red[1] <= red[1] + multi_rgb1;
+				green[1] <= green[1] + multi_rgb2; // RGB317 calculated
+		
+			
+				M1_state <= LO_33;
+			end
+			
+			LO_33: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				
+				u_prime_odd <= multi;
+				blue[0] <= multi_rgb1;
+				
+				op1 <= u_1[1] + u_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= u_1[1];
+				coeff <= -32'sd25624;				
+				r_reg[1] <= r_out[1];
+				b_reg[1] <= b_out[1];
+				g_reg[1] <= g_out[1]; // RGB317 stored
+				
+				
+				M1_state <= LO_34;
+			end
+			
+			LO_34: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				
+				op1 <= u_3[1] + u_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= v_1[1];
+				coeff <= 32'sd104595;
+				
+				u_prime_odd <= u_prime_odd + multi;
+				green[0] <= multi_rgb1;
+						
+			
+				M1_state <= LO_35;
+			end
+			
+			LO_35: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				
+				op1 <= v_5[1] + v_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= v_1[1];
+				coeff <= -32'sd53281;
+				
+				u_prime_odd <= (u_prime_odd + multi + 32'd128) >>> 8; //u'319 calculated
+				red[0] <= multi_rgb1;
+				
+
+				M1_state <= LO_36;
+			end
+			
+			LO_36: begin
+				op1 <= v_1[1] + v_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= y_reg[1][15:8];//y316
+				coeff <= 32'sd76204;
+				
+				v_prime_odd <= multi;
+				green[0] <= green[0] + multi_rgb1;
+		
+			
+				M1_state <= LO_37;
+			end
+			
+			LO_37: begin
+				v_prime_odd <= v_prime_odd+multi;
+				
+				op1 <= v_3[1] + v_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= y_reg[1][7:0]; //y317
+				coeff <= 32'sd76204;
+				
+				
+				red[0] <= red[0] + multi_rgb1;
+				green[0] <= green[0] + multi_rgb1;
+				blue[0] <= blue[0] + multi_rgb1; // RGB318 calculated
+		
+			
+				M1_state <= LO_38;
+			end
+			
+			LO_38: begin
+				v_prime_odd <= (v_prime_odd + multi + 32'd128) >>> 8; //v'319 calculated
+				op3 <= u_prime_odd; // u'319
+				op4 <= u_prime_odd; // u'319
+				
+				coeff <= 32'sd132251; // b
+				coeff2 <= -32'sd25624; // g
+				
+				red[1] <= multi_rgb1;
+				green[1] <= multi_rgb1;
+				blue[1] <= multi_rgb1;
+				
+				
+				r_reg[0] <= r_out[0];
+				b_reg[0] <= b_out[0];
+				g_reg[0] <= g_out[0]; // RGB318 stored
+				
+				
+				
+				M1_state <= LO_39;
+			end
+			
+			LO_39: begin
+				op3 <= v_prime_odd;
+				op4 <= v_prime_odd;
+				
+				coeff <= 32'sd104595; // r
+				coeff2 <= -32'sd53281; // g
+				
+				
+				blue[1] <= blue[1] + multi_rgb1;
+				green[1] <= green[1] + multi+rgb2;
+			
+				M1_state <= LO_40;
+			end
+			
+			LO_40: begin
+				op1 <= u_5[1] + u_5[0];
+				op2 <= 9'sd21;
+				
+				op3 <= u_1[1];
+				coeff <= 32'sd132251;
+				
+				red[1] <= red[1] + multi_rgb1;
+				green[1] <= green[1] + multi_rgb2; // RGB319 calculated
+		
+			
+				M1_state <= LO_41;
+			end
+			
+			LO_41: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				
+				SRAM_write_data <= {g_reg[1],b_reg[1]};
+				
+				u_prime_odd <= multi;
+				blue[0] <= multi_rgb1;
+				
+				op1 <= u_1[1] + u_1[0];
+				op2 <= 9'sd159;
+				
+				op3 <= u_1[1];
+				coeff <= -32'sd25624;				
+				r_reg[1] <= r_out[1];
+				b_reg[1] <= b_out[1];
+				g_reg[1] <= g_out[1]; // RGB319 stored
+				
+				
+				M1_state <= LO_42;
+			end
+			
+			LO_42: begin
+				SRAM_address <= RGB_address;
+				RGB_address <= RGB_address + 18'd1;
+				
+				SRAM_write_data <= {b_reg[1],r_reg[1]};
+				
+				op1 <= u_3[1] + u_3[0];
+				op2 <= -9'sd52;
+				
+				op3 <= v_1[1];
+				coeff <= 32'sd104595;
+				
+				u_prime_odd <= u_prime_odd + multi;
+				green[0] <= multi_rgb1;
+						
+			
+				M1_state <= LO_43;
+			end
+			
+			LO_43 : begin
+				SRAM_we_n <= 1'b1;
+				if (y_counter == 18'd38400) begin //finish rows;
+				M1_state <= M1_finish;
+			end else begin
+				M1_state <= M1_IDLE;
+				y_counter_loop <= y_counter;     //160
+				end
+			end
+  
+			M1_finish : begin
+				done <= 1'b1;
+				M1_state <= M1_IDLE;
+			end
+			
+			
+			
+			default : M1_state <= M1_IDLE;
+		endcase
+					
+			
+	end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+assign op1_extended = {23'd0, op1};
+assign op2_extended = {{23{op2[8]}},op2};
+assign op3_math = (coeff == 32'sd76284) ? op3 - 32'd16 : op3 - 32'd128;
+assign op4_math = (coeff2 == 32'sd76284) ? op4 - 32'd16 : op4 - 32'd128;
+
+assign multi = op1_extended * op2_extended;
+assign multi_rgb1 = $signed(coeff * op3_math);
+assign multi_rgb2 = $signed(coeff2 * op4_math);
+
+// assign MULTI_RGB1 = (coeff == 32'sd76284) ? coeff * (op4 - 32'sd16) : coeff * (op4 - 32'sd128);
+
+// clipping algorithm
+assign r_out[1] = (red[1][31]) ? 8'd0 : (|red[1][30:24]) ? 8'd255 : red[1][23:16];
+assign g_out[1] = (green[1][31]) ? 8'd0 : (|green[1][30:24]) ? 8'd255 : green[1][23:16];
+assign b_out[1] = (blue[1][31]) ? 8'd0 : (|blue[1][30:24]) ? 8'd255 : blue[1][23:16];
+
+assign r_out[0] = (red[0][31]) ? 8'd0 : (|red[0][30:24]) ? 8'd255 : red[0][23:16];
+assign g_out[0] = (green[0][31]) ? 8'd0 : (|green[0][30:24]) ? 8'd255 : green[0][23:16];
+assign b_out[0] = (blue[0][31]) ? 8'd0 : (|blue[0][30:24]) ? 8'd255 : blue[0][23:16];
+
+endmodule
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
