@@ -1,0 +1,117 @@
+
+State Machine - |project|top_state
+Name top_state.state_bit_1 top_state.state_bit_0 
+top_state.S_IDLE 0 0 
+top_state.S_UART_RX 0 1 
+top_state.S_M2 1 0 
+top_state.S_M1 1 1 
+
+State Machine - |project|milestone1:M1_unit|M1_state
+Name M1_state.state_bit_4 M1_state.state_bit_3 M1_state.state_bit_2 M1_state.state_bit_1 M1_state.state_bit_0 
+M1_state.IDLE 0 0 0 0 0 
+M1_state.LI_0 0 0 0 0 1 
+M1_state.LI_1 0 0 0 1 1 
+M1_state.LI_2 0 0 1 0 1 
+M1_state.LI_3 0 0 1 1 1 
+M1_state.LI_4 0 0 1 0 0 
+M1_state.LI_5 0 0 1 1 0 
+M1_state.LI_6 0 1 0 0 0 
+M1_state.LI_7 0 1 0 1 0 
+M1_state.CC_0 0 1 0 0 1 
+M1_state.CC_1 0 1 0 1 1 
+M1_state.CC_2 0 1 1 0 0 
+M1_state.CC_3 0 1 1 1 0 
+M1_state.CC_4 0 1 1 0 1 
+M1_state.CC_5 0 1 1 1 1 
+M1_state.CC_6 1 0 0 0 0 
+M1_state.CC_7 1 0 0 1 0 
+M1_state.CC_8 1 0 0 0 1 
+M1_state.LO_0 1 0 0 1 1 
+M1_state.LO_1 1 0 1 0 0 
+M1_state.LO_2 1 0 1 1 0 
+M1_state.LO_3 1 0 1 0 1 
+M1_state.LO_4 1 0 1 1 1 
+M1_state.LO_5 0 0 0 1 0 
+
+State Machine - |project|milestone2:M2_unit|M2_state
+Name M2_state.state_bit_5 M2_state.state_bit_4 M2_state.state_bit_3 M2_state.state_bit_2 M2_state.state_bit_1 M2_state.state_bit_0 
+M2_state.M2_IDLE 0 0 0 0 0 0 
+M2_state.M2_IDLE_0 0 0 0 0 0 1 
+M2_state.M2_IDLE_1 0 0 0 0 1 1 
+M2_state.Fs_LI_0 0 0 0 1 0 1 
+M2_state.Fs_LO_1 0 0 0 0 1 0 
+M2_state.Fs_LO_2 0 0 0 1 0 0 
+M2_state.Fs_LO_3 0 0 0 1 1 0 
+M2_state.Ct_LI_0 0 0 0 1 1 1 
+M2_state.Ct_LI_1 0 0 1 0 0 0 
+M2_state.Ct_CC_0 0 0 1 0 0 1 
+M2_state.Ct_CC_1 0 0 1 0 1 0 
+M2_state.Ct_CC_2 0 0 1 0 1 1 
+M2_state.Ct_CC_3 0 1 0 0 0 0 
+M2_state.Ct_LO_0 0 0 1 1 0 0 
+M2_state.Ct_LO_1 0 0 1 1 0 1 
+M2_state.Ct_LO_2 0 0 1 1 1 0 
+M2_state.Ct_LO_3 0 0 1 1 1 1 
+M2_state.Ct_LO_4 0 1 0 0 0 1 
+M2_state.Ct_LO_5 0 1 0 0 1 0 
+M2_state.Ct_LO_6 0 1 0 0 1 1 
+M2_state.Ct_LO_7 0 1 0 1 0 0 
+M2_state.Cs_Fs_CC_0 0 1 0 1 0 1 
+M2_state.Cs_Fs_CC_1 1 0 0 1 0 1 
+M2_state.Cs_Fs_CC_2 1 0 0 0 0 1 
+M2_state.Cs_Fs_CC_3 0 1 0 1 1 0 
+M2_state.Cs_Fs_CC_4 1 0 0 0 1 0 
+M2_state.Cs_Fs_CC_5 0 1 0 1 1 1 
+M2_state.Ct_Ws_CC_0 0 1 1 0 0 0 
+M2_state.Ct_Ws_CC_1 0 1 1 0 0 1 
+M2_state.Ct_Ws_CC_2 0 1 1 0 1 0 
+M2_state.Ct_Ws_CC_3 0 1 1 0 1 1 
+M2_state.Ct_Ws_CC_4 0 1 1 1 0 0 
+M2_state.Ct_Ws_CC_5 0 1 1 1 0 1 
+M2_state.Ct_Ws_CC_6 0 1 1 1 1 0 
+M2_state.Ct_Ws_CC_7 0 1 1 1 1 1 
+M2_state.Ct_Ws_CC_8 1 0 0 0 0 0 
+M2_state.Ct_Ws_CC_9 1 0 0 0 1 1 
+M2_state.Ct_Ws_CC_10 1 0 0 1 0 0 
+M2_state.Ct_Ws_CC_11 1 0 0 1 1 0 
+M2_state.Cs_LO_0 1 0 0 1 1 1 
+M2_state.Cs_LO_1 1 0 1 1 0 1 
+M2_state.Cs_LO_2 1 0 1 0 0 1 
+M2_state.Cs_LO_3 1 0 1 0 0 0 
+M2_state.Ws_LO_0 1 0 1 0 1 0 
+M2_state.Ws_LO_1 1 0 1 0 1 1 
+M2_state.Ws_LO_2 1 0 1 1 0 0 
+M2_state.Ws_LO_3 1 0 1 1 1 1 
+M2_state.Ws_LO_4 1 0 1 1 1 0 
+M2_state.Ws_LO_5 1 1 0 0 0 0 
+M2_state.Ws_finish 1 1 0 0 0 1 
+
+State Machine - |project|UART_SRAM_interface:UART_unit|UART_SRAM_state
+Name UART_SRAM_state.state_bit_2 UART_SRAM_state.state_bit_1 UART_SRAM_state.state_bit_0 
+UART_SRAM_state.S_US_IDLE 0 0 0 
+UART_SRAM_state.S_US_STRIP_FILE_HEADER_1 0 1 0 
+UART_SRAM_state.S_US_STRIP_FILE_HEADER_2 1 1 0 
+UART_SRAM_state.S_US_START_FIRST_BYTE_RECEIVE 1 0 0 
+UART_SRAM_state.S_US_WRITE_FIRST_BYTE 1 0 1 
+UART_SRAM_state.S_US_START_SECOND_BYTE_RECEIVE 1 1 1 
+UART_SRAM_state.S_US_WRITE_SECOND_BYTE 0 0 1 
+
+State Machine - |project|UART_SRAM_interface:UART_unit|UART_receive_controller:UART_RX|RXC_state
+Name RXC_state.state_bit_1 RXC_state.state_bit_0 
+RXC_state.S_RXC_IDLE 0 0 
+RXC_state.S_RXC_SYNC 0 1 
+RXC_state.S_RXC_ASSEMBLE_DATA 1 0 
+RXC_state.S_RXC_STOP_BIT 1 1 
+
+State Machine - |project|VGA_SRAM_interface:VGA_unit|VGA_SRAM_state
+Name VGA_SRAM_state.state_bit_3 VGA_SRAM_state.state_bit_2 VGA_SRAM_state.state_bit_1 VGA_SRAM_state.state_bit_0 
+VGA_SRAM_state.S_VS_WAIT_NEW_PIXEL_ROW 0 0 0 0 
+VGA_SRAM_state.S_VS_NEW_PIXEL_ROW_DELAY_1 1 0 0 0 
+VGA_SRAM_state.S_VS_NEW_PIXEL_ROW_DELAY_2 1 0 0 1 
+VGA_SRAM_state.S_VS_NEW_PIXEL_ROW_DELAY_3 0 0 0 1 
+VGA_SRAM_state.S_VS_NEW_PIXEL_ROW_DELAY_4 0 0 1 0 
+VGA_SRAM_state.S_VS_NEW_PIXEL_ROW_DELAY_5 1 0 1 0 
+VGA_SRAM_state.S_VS_FETCH_PIXEL_DATA_0 0 0 1 1 
+VGA_SRAM_state.S_VS_FETCH_PIXEL_DATA_1 1 0 1 1 
+VGA_SRAM_state.S_VS_FETCH_PIXEL_DATA_2 1 1 0 0 
+VGA_SRAM_state.S_VS_FETCH_PIXEL_DATA_3 0 1 0 0 
